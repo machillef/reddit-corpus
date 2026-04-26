@@ -1,31 +1,35 @@
 # Plan: reddit-scraper
 
+> **Status as of 2026-04-26.** Phases 1, 2, and 3 are complete (Slices 1–10).
+> The remaining work is Phase 4: Slice 11 (live integration test, blocked on
+> Reddit credentials per ADR 0002) and Slice 12 (logging polish, scheduler
+> example docs). See `docs/ai/reddit-scraper-status.md` for live per-slice
+> state.
+
 ## Phases
 
-### Phase 1 — Foundation (Slices 1-4)
+### Phase 1 — Foundation (Slices 1-4) — Complete
 Stand up the cross-platform infrastructure and the storage layer that the rest of the system writes against.
 - **Slice 1** — Push to a private GitHub repo and stand up the CI matrix (Win / Linux / macOS) running quality gates against the existing scaffold. Proves cross-platform from day one.
 - **Slice 2** — Pre-flight check script (`scripts/check_prereqs.py` + `.sh` / `.ps1` shims). User-requested.
 - **Slice 3** — SQLite schema layer (`corpus/schema.py` + `corpus/posts.py` + `corpus/comments.py`). Pure-DB unit tests with `:memory:`. No network anywhere.
 - **Slice 4** — Config layer (`config.py`) with `platformdirs`, env/CLI/file precedence, `config.toml` shape. Gitignored `config.toml`; checked-in `config.example.toml`.
 
-### Phase 2 — Ingest path (Slices 5-7)
+### Phase 2 — Ingest path (Slices 5-7) — Complete
 Get data from Reddit into SQLite end-to-end.
 - **Slice 5** — Reddit auth and listing pull (`reddit/client.py` + `reddit/ingest.py` for `/new` only, no comments). Hand-rolled PRAW fakes for tests. `auth test` CLI subcommand.
 - **Slice 6** — Comment-tree expansion (`reddit/ingest.py` calls `replace_more` and walks the tree). `more_expand_limit` config knob. Tests with deeper fakes.
 - **Slice 7** — Full ingest end-to-end — `cli/ingest_cmd.py` wires `reddit → corpus → DB`. Per-post transactions, per-sub summary logging, rate-limit observation. CLI integration tests against fakes.
 
-### Phase 3 — Query path (Slices 8-10)
+### Phase 3 — Query path (Slices 8-10) — Complete
 LLM-facing query surface over the corpus.
 - **Slice 8** — Read-side query commands (`posts list`, `posts show`, `thread show`, `comments search`, `subs list`) as click subcommand groups. JSON renderer first (deterministic, easy to assert on).
 - **Slice 9** — Markdown renderer (`cli/render.py`). Both formats wired to all query commands.
 - **Slice 10** — Admin commands (`init`, `subs`). README setup guide for OAuth flow.
 
-### Phase 4 — Production-readiness (Slice 11+)
-- **Slice 11** — Live integration test (gated behind `REDDIT_CORPUS_LIVE=1`), one-shot ingest of `r/anthropic` end-to-end. Skipped in CI; runnable by hand after dependency upgrades.
+### Phase 4 — Production-readiness (Slice 11+) — In progress
+- **Slice 11** — Live integration test (gated behind `REDDIT_CORPUS_LIVE=1`), one-shot ingest of `r/anthropic` end-to-end. Skipped in CI; runnable by hand after dependency upgrades. **Blocked on Reddit Data API approval (ADR 0002).**
 - **Slice 12** — Polish: `--log-level`, error-message ergonomics, README troubleshooting section, scheduler examples (Task Scheduler / cron / launchd) as documentation only.
-
-(Slice details for Phase 2+ are deferred until Phase 1 is complete — `arc:continue` plans each next slice with the latest real codebase context, which is more reliable than guessing five slices ahead.)
 
 ---
 

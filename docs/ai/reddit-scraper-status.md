@@ -51,7 +51,7 @@ When all checkboxes are ticked and Step 7's structured output has been emitted, 
 - **Reddit credentials require pre-approval (Responsible Builder Policy, late 2025).** Self-service `reddit.com/prefs/apps` is gated; submissions silently fail until the account is approved through Reddit's Developer Support form (~7-day target). See `docs/adr/0002-reddit-api-pre-approval.md`.
 
 ## Active blockers
-- **Reddit API credentials pending approval.** As of 2026-04-26 the user has filed (or is in the process of filing) an application via Reddit's Developer Support form per ADR 0002. No code changes required while we wait — Slices 1–5 are runtime-complete and the credentials drop-in is unchanged. **Slices 6+ (live ingest) cannot be acceptance-tested against real Reddit until credentials arrive.** Pure-unit tests against PRAW fakes continue to pass and CI matrix is unaffected.
+- **Reddit API credentials pending approval.** As of 2026-04-26 the user has filed an application via Reddit's Developer Support form per ADR 0002. No code changes required while we wait. Slices 1–10 are runtime-complete against PRAW fakes (129 tests passing, CI green on Win / Linux / macOS). **Only Slice 11 — the live integration test gated on `REDDIT_CORPUS_LIVE=1` — needs real credentials to run.** Slice 12 (polish: logging flags, scheduler example docs) is doable without credentials.
 
 ---
 
@@ -112,21 +112,17 @@ Run `/arc:continue reddit-scraper` to start Slice 1 (push to private GitHub repo
 ---
 
 ## Slice 1: Push to GitHub + cross-platform CI matrix
-Status: Partial — CI YAML committed locally; GitHub push deferred (needs user confirmation of owner/name)
+Status: Complete
 Last updated: 2026-04-26
 
 ### What was implemented
-- `.github/workflows/ci.yml` — matrix on `windows-latest` / `ubuntu-latest` / `macos-latest`, Python 3.13, uses `astral-sh/setup-uv@v3`, runs `uv sync` → `ruff check` → `ruff format --check` → `ty check` → `pytest -v`. Triggers on push and PR for `main` and `master`.
+- `.github/workflows/ci.yml` — matrix on `windows-latest` / `ubuntu-latest` / `macos-latest`, Python 3.13, uses `astral-sh/setup-uv@v3`. Runs `uv sync` → `ruff check` → `ruff format --check` → `ty check` → `pytest -v`. Triggers on push and PR for `main` and `master`. Has `permissions: contents: read` (defense-in-depth).
+- Repository created at <https://github.com/machillef/reddit-corpus> (public).
+- Initial push triggered the CI matrix; all three OSes reported success on the first run.
 
 ### What was validated
-- Local quality gates clean: `uv run ruff check .` ✓, `uv run ruff format --check .` ✓, `uv run ty check` ✓, `uv run pytest` ✓ (2 passed).
-
-### What remains unverified
-- GitHub repo does not exist yet — needs user to confirm owner/name and run `gh repo create`. This is the only blocker for "Done when" criterion.
-- CI matrix has not been exercised on a real push.
-
-### Blockers
-None. Repo created at <https://github.com/machillef/reddit-corpus> on 2026-04-26 and CI matrix triggered on first push.
+- Local quality gates clean: `ruff check`, `ruff format --check`, `ty check`, `pytest`.
+- CI matrix green on the first push and on every subsequent commit through Slice 10.
 
 ---
 
@@ -175,7 +171,7 @@ Last updated: 2026-04-26
 - REGEXP wired correctly: `'claude code' REGEXP 'claude'` → 1.
 
 ### What remains unverified
-- Real-thread tree-walk fidelity at depth > 5 (deferred until Slice 6 produces live data).
+- Real-thread tree-walk fidelity at depth > 5 (deferred until live ingest in Slice 11).
 - REGEXP flag semantics (case sensitivity behavior) — to be decided when CLI search command lands in Slice 8.
 - See `.claude/loop-qa.local.md` for the QA list.
 
@@ -223,10 +219,10 @@ Last updated: 2026-04-26
 ### What remains unverified
 - Live network call against real Reddit OAuth — manual, gated outside CI. Listed in `.claude/loop-qa.local.md`.
 - PRAW `auth.limits` shape stability across PRAW versions — `observe()` is the only place we read it, so future churn is contained.
-- Comment-tree expansion (`replace_more`) — explicitly deferred to Slice 6 per `slices.md`.
+- Comment-tree expansion shipped in Slice 6.
 
 ### Blockers
-None — Slices 6+ are sketched in `plan.md` but not detailed; they are out of scope for this loop run.
+None.
 
 ---
 
@@ -253,3 +249,93 @@ Last updated: 2026-04-26
 ### Final test/quality gate state
 - `uv run pytest -q` → 86 passed.
 - `uv run ruff check .` ✓, `uv run ruff format --check .` ✓, `uv run ty check` ✓.
+
+---
+
+## Slice 6: Comment-tree expansion
+Status: Complete
+Last updated: 2026-04-26
+
+### What was implemented
+- `expand_thread(submission, *, sub_canonical, fetched_at, more_expand_limit=32)` in `reddit/ingest.py`. Calls `submission.comments.replace_more(limit=...)` then walks the surviving forest depth-first, parents before children. Emits canonical `Comment` dataclasses with `(id, post_id, parent_comment_id, depth, …)` in tree-walk order so a sequential `upsert_comments` pass satisfies the FK on `parent_comment_id` row by row.
+- Tolerance for orphan parent ids: a comment whose parent is missing from the local forest (e.g. its parent was a `MoreComments` stub that wasn't expanded) is emitted with `parent_comment_id=None` and `depth=0` rather than crashing.
+- Deeper PRAW fakes in `tests/fakes/praw_fakes.py`: `FakeComment`, `FakeMoreComments`, and `FakeCommentForest` with `.list()` and `.replace_more()` methods that mirror PRAW's surface.
+
+### What was validated
+- 12 new tests in `tests/unit/test_expand_thread.py` covering tree-walk ordering, depth assignment, MoreComments dropping, removal-status mapping, null author, default and zero limit, and orphan tolerance.
+- Total tests: 98 passed. All quality gates green.
+
+---
+
+## Slice 7: Full ingest pipeline
+Status: Complete
+Last updated: 2026-04-26
+
+### What was implemented
+- `cli/ingest_cmd.py` — `reddit-corpus ingest` command. Iterates over (subreddits × listings), expands each post's comment forest, writes per-post in a single SQLite transaction. Per-post failures are isolated (logged and counted) so one bad post does not kill the whole run. Between subs, the loop observes PRAW's rate-limit budget via `ratelimit.observe` and aborts the next sub if `remaining < 10`.
+- `reddit-corpus init` — companion command that creates the DB and applies the schema. Idempotent.
+- CLI flags on `ingest`: `--sub`, `--listings`, `--more-expand-limit`, `--dry-run`, `--config-path`.
+- `corpus/subreddits.py` (new module) — `ensure_subreddit_row` (idempotent on display_name, preserves first_seen_at), `touch_last_ingested`, `list_subreddits`. `SubredditRow` dataclass.
+- `reddit/ingest.py` refactored: extracted `iter_submissions` (yields raw Submissions for ingest); `pull_listing` now wraps it for read-only previews.
+
+### What was validated
+- 11 new tests (4 subreddits DAO + 7 ingest CLI) → 109 total. All quality gates green.
+
+---
+
+## Slice 8: Read-side query commands
+Status: Complete
+Last updated: 2026-04-26
+
+### What was implemented
+- Four click subcommand groups, one file each under `src/reddit_corpus/cli/`:
+  - `posts list --sub --since --top --sort` (filters, sorts, caps).
+  - `posts show POST_ID` (single post; `thread show` covers post + comments per CONTEXT.md).
+  - `thread show POST_ID` (post + full comment tree in tree-walk order).
+  - `comments search --sub --pattern --limit` (regex over comment bodies).
+  - `subs list` (all subs with first-seen and last-ingested timestamps).
+- `cli/render.py` — JSON renderer with deterministic shapes mirroring the schema.
+- `cli/_common.py` — `parse_since` (relative durations like `7d` / `24h` / `2w`, or ISO dates), `load_config_or_exit`, `open_db_or_exit` (refuses to operate against a missing DB and tells the user to run `init`).
+- `comments search` surfaces `re.error` from the REGEXP function as a friendly "Invalid regex pattern" message instead of a crash.
+
+### What was validated
+- 14 new CliRunner tests against a tmpdir SQLite seed → 123 total.
+
+---
+
+## Slice 9: Markdown renderer
+Status: Complete
+Last updated: 2026-04-26
+
+### What was implemented
+- Markdown variants in `cli/render.py` for every read shape (posts list, post, thread, comments search, subs list).
+- `--format md` is the default; `--format json` is opt-in for pipelines.
+- Removal-status decoration (italicised `[removed by mod]`, `[deleted by author]`) so the LLM consumer can tell present, mod-removed, and self-deleted content apart without parsing structured fields.
+- Empty-result-friendly: `posts list` against a sub with no matches renders `*(no posts match these filters)*` rather than an empty string.
+
+### What was validated
+- 6 new markdown tests added to `test_cli_read.py` → 129 total. All quality gates green.
+
+---
+
+## Slice 10: Admin commands (init, subs)
+Status: Complete (folded into Slices 7 + 8)
+Last updated: 2026-04-26
+
+### What was implemented
+- `init` shipped alongside `ingest` in Slice 7 (`cli/ingest_cmd.py:init_cmd`).
+- `subs list` shipped alongside the read commands in Slice 8 (`cli/subs_cmd.py`).
+- Both are exposed via the top-level `reddit-corpus` click group.
+
+### What was validated
+- Already covered by Slice 7's CLI tests (`init` is exercised implicitly when `ingest` runs against a fresh tmpdir DB) and Slice 8's `test_subs_list_returns_all_with_timestamps`.
+
+---
+
+## Repository state at end of Slice 10
+- 129 unit tests passing.
+- `ruff check`, `ruff format --check`, `ty check`, `pytest` all green locally and in CI on Windows / Linux / macOS.
+- Public repository: <https://github.com/machillef/reddit-corpus>.
+- Outstanding work:
+  - **Slice 11** — live integration test gated on `REDDIT_CORPUS_LIVE=1`. Blocked on Reddit credentials per ADR 0002.
+  - **Slice 12** — polish (logging flags, scheduler example docs). Doable any time.

@@ -1,6 +1,11 @@
 # Slices: reddit-scraper
 
-> Detailed plans for the next 3-5 slices. Slices beyond this are sketched in `plan.md` and detailed by `arc:continue` just-in-time.
+> **Status as of 2026-04-26: Slices 1–10 are complete.** This file retains the
+> *original detailed plans* for Slices 1–5 as a historical record, plus a
+> retrospective summary of Slices 6–10 below. The live per-slice "what was
+> implemented" / "what was validated" entries are in
+> `docs/ai/reddit-scraper-status.md`. Slices 11 and 12 remain sketched in
+> `plan.md` and will be detailed by `arc:continue` just-in-time.
 
 ---
 
@@ -158,7 +163,31 @@ Done when:
 
 ---
 
-> Slices 6-12 are sketched in `plan.md`. Each will be detailed by `arc:continue` immediately before it starts, using the latest codebase context.
+> Slices 6–10 were completed during the same session that delivered Slices 1–5.
+> Their detailed "what was implemented" entries live in
+> `docs/ai/reddit-scraper-status.md`. A short summary follows for readers who
+> want the shape of each slice without leaving this file:
+>
+> - **Slice 6** — `expand_thread()` in `reddit/ingest.py`. Walks PRAW's comment
+>   forest after `replace_more()` and emits `Comment` dataclasses in tree-walk
+>   order. Tolerant of orphan parent ids. Deeper PRAW fakes added.
+> - **Slice 7** — `cli/ingest_cmd.py`. Wires `reddit → corpus → DB` with
+>   per-post transactions, per-post failure isolation, and ratelimit-aware
+>   abort between subs. New `corpus/subreddits.py` DAO module. Also ships
+>   `init` (idempotent schema apply).
+> - **Slice 8** — Read-side query commands: `posts list/show`, `thread show`,
+>   `comments search`, `subs list`. JSON renderer. `cli/_common.py` for
+>   `parse_since` (relative or ISO date) and shared helpers.
+> - **Slice 9** — Markdown renderer in `cli/render.py`. `--format md` becomes
+>   the default; `--format json` is opt-in. Removal-status decoration.
+> - **Slice 10** — `init` and `subs list` admin commands. Both folded into
+>   Slices 7 and 8 rather than getting a dedicated commit, since the surface
+>   was small and naturally adjacent to those slices' work.
+>
+> Slices 11 and 12 remain to do. Slice 11 (live integration test gated on
+> `REDDIT_CORPUS_LIVE=1`) is blocked on Reddit credentials per ADR 0002.
+> Slice 12 (logging flags, scheduler example docs, README troubleshooting)
+> can land any time and does not need credentials.
 
 ---
 

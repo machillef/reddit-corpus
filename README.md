@@ -2,7 +2,7 @@
 
 Personal Reddit corpus tool — a scheduled `praw` ingester paired with an LLM-friendly query CLI over a local SQLite store. Cross-platform (Windows / Linux / macOS).
 
-> **Status: foundation built.** Slices 1–5 complete (CI, pre-flight, schema, config, auth). See `docs/ai/reddit-scraper-status.md` for the live slice tracker.
+> **Status: feature-complete pending Reddit credentials.** Slices 1–10 complete (CI, pre-flight, schema, config, auth, ingest with comment-tree expansion, all read commands, markdown + JSON renderers, init/subs admin). The only remaining work is Slice 11 (live integration test, gated on real Reddit credentials) and Slice 12 (logging polish). See `docs/ai/reddit-scraper-status.md` for the live slice tracker.
 
 > **If you're reading this trying to remember how setup works**: jump straight to [Setup](#setup) — the OAuth bootstrap is steps 2–3. You only do those once per Reddit account, ever. Steps 1, 4, 5 are once per PC. **As of late 2025, step 2 requires Reddit's manual approval (~7-day wait) — see the heads-up box at the top of step 2 and `docs/adr/0002-reddit-api-pre-approval.md`.**
 
@@ -85,10 +85,10 @@ training (no).
 `client_secret`. The credentials are **account-scoped**, not host-scoped:
 once you have them, they work on every PC.
 
-While you wait: this repo's Slices 1–5 are runtime-complete against PRAW
-fakes — `uv run pytest` still passes 86/86 — so you can keep refactoring or
-plan Slice 6 without credentials. You only need real credentials to do a
-live `auth test` and live ingest.
+While you wait: the entire feature surface (ingest, query, render) is
+runtime-complete against PRAW fakes. `uv run pytest` passes 129/129 and
+the CI matrix is green on Windows / Linux / macOS. You only need real
+credentials to do a live `auth test` and live ingest run.
 
 **Once approved, also confirm the redirect uri.** Reddit's email or developer
 console will show your app's settings; the redirect uri must be
@@ -207,20 +207,31 @@ To recover from a 401 with credentials that previously worked:
    client_secret stay the same — you just need a fresh refresh token). Save the
    new token; copy it to every PC's `config.toml`.
 
-## Usage (planned — Slice 6+ pending)
+## Usage
 
 ```bash
-# Ingest top + new posts (with full comment trees) from configured subreddits
-uv run reddit-corpus ingest
+# One-time per host: create the corpus DB and apply the schema.
+uv run reddit-corpus init
 
-# LLM-facing queries (markdown by default; --format json for pipelines)
-uv run reddit-corpus posts list --sub anthropic --since 7d
+# Verify Reddit OAuth credentials are working.
+uv run reddit-corpus auth test
+
+# Ingest configured subreddits (posts + full comment trees) into the corpus.
+uv run reddit-corpus ingest
+uv run reddit-corpus ingest --sub anthropic,LocalLLaMA --listings new,top:week
+
+# Queries — markdown by default, --format json for pipelines.
+uv run reddit-corpus posts list --sub anthropic --since 7d --top 10 --sort score
+uv run reddit-corpus posts show <post_id>
 uv run reddit-corpus thread show <post_id>
 uv run reddit-corpus comments search --sub anthropic --pattern "claude code"
 uv run reddit-corpus subs list
 ```
 
-Currently only `auth test` is wired (Slice 5). The other commands land in Slices 6–10.
+Every read command takes `--format md` (default) or `--format json`. Every
+command takes `--config-path` to override the default config location.
+`ingest` additionally takes `--more-expand-limit`, `--dry-run`, `--sub`, and
+`--listings` overrides.
 
 ## Development
 

@@ -102,6 +102,31 @@ def _submission_to_post(submission: Any, sub: str, fetched_at: int) -> Post:
     )
 
 
+def iter_submissions(
+    client: Any,
+    sub: str,
+    listing_spec: str,
+    *,
+    limit: int | None = None,
+) -> Iterator[Any]:
+    """Yield raw PRAW Submission objects for the listing.
+
+    Used by the ingest pipeline, which needs the Submission to expand its
+    comment forest. The lighter `pull_listing` (returns Posts) is for
+    read-only previews. Both share the same listing-spec parsing and
+    canonicalization.
+    """
+    sort, time_filter = parse_listing_spec(listing_spec)
+    canonical = canonicalize_subreddit(sub)
+    subreddit_obj = client.subreddit(canonical)
+
+    if sort == "new":
+        return iter(subreddit_obj.new(limit=limit))
+    if sort == "hot":
+        return iter(subreddit_obj.hot(limit=limit))
+    return iter(subreddit_obj.top(time_filter=time_filter, limit=limit))
+
+
 def pull_listing(
     client: Any,
     sub: str,
@@ -112,22 +137,10 @@ def pull_listing(
 ) -> Iterator[Post]:
     """Yield `Post` dataclasses for `sub` under `listing_spec`.
 
-    The client may be a real `praw.Reddit` or a `FakeReddit`-shape object —
-    we only call documented PRAW surface (`reddit.subreddit(name).new()`,
-    `.hot()`, `.top(time_filter=)`).
+    Convenience wrapper over `iter_submissions` for the read-only case.
     """
-    sort, time_filter = parse_listing_spec(listing_spec)
     canonical = canonicalize_subreddit(sub)
-    subreddit_obj = client.subreddit(canonical)
-
-    if sort == "new":
-        submissions = subreddit_obj.new(limit=limit)
-    elif sort == "hot":
-        submissions = subreddit_obj.hot(limit=limit)
-    else:
-        submissions = subreddit_obj.top(time_filter=time_filter, limit=limit)
-
-    for submission in submissions:
+    for submission in iter_submissions(client, sub, listing_spec, limit=limit):
         yield _submission_to_post(submission, canonical, fetched_at)
 
 

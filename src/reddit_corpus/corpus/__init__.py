@@ -6,6 +6,6 @@ canonical `Post` / `Comment` dataclasses from `reddit_corpus.reddit`.
 
 from __future__ import annotations
 
-from reddit_corpus.corpus import comments, posts, schema
+from reddit_corpus.corpus import comments, posts, schema, subreddits
 
-__all__ = ["comments", "posts", "schema"]
+__all__ = ["comments", "posts", "schema", "subreddits"]

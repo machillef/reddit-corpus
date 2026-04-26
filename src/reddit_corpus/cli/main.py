@@ -1,13 +1,11 @@
-"""Top-level click app for `reddit-corpus`.
-
-Slice 5 wires up only the `auth` group. Other groups land in later slices.
-"""
+"""Top-level click app for `reddit-corpus`."""
 
 from __future__ import annotations
 
 import click
 
 from reddit_corpus.cli.auth_cmd import auth_group
+from reddit_corpus.cli.ingest_cmd import ingest_cmd, init_cmd
 
 
 @click.group()
@@ -17,3 +15,5 @@ def cli() -> None:
 
 
 cli.add_command(auth_group, name="auth")
+cli.add_command(ingest_cmd)
+cli.add_command(init_cmd)

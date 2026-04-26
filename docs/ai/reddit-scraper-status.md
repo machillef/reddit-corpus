@@ -35,7 +35,8 @@ When all checkboxes are ticked and Step 7's structured output has been emitted, 
 | 4  | Config layer                                               | Complete    |
 | 5  | Reddit auth + listing pull (no comments yet)               | Complete    |
 | 6  | Comment-tree expansion (`expand_thread`)                   | Complete    |
-| 7+ | (sketched in `plan.md`; detailed JIT by `arc:continue`)    | —           |
+| 7  | Full ingest pipeline (`cli/ingest_cmd.py` + `init`)        | Complete    |
+| 8+ | (sketched in `plan.md`; detailed JIT by `arc:continue`)    | —           |
 
 ## Constraints
 - Cross-platform: runs unchanged on Windows / Linux / macOS from a single codebase.

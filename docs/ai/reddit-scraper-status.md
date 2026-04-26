@@ -36,8 +36,10 @@ When all checkboxes are ticked and Step 7's structured output has been emitted, 
 | 5  | Reddit auth + listing pull (no comments yet)               | Complete    |
 | 6  | Comment-tree expansion (`expand_thread`)                   | Complete    |
 | 7  | Full ingest pipeline (`cli/ingest_cmd.py` + `init`)        | Complete    |
-| 8  | Read-side query commands (posts, thread, comments, subs)   | Complete (JSON only; markdown lands in Slice 9) |
-| 9+ | (sketched in `plan.md`; detailed JIT by `arc:continue`)    | —           |
+| 8  | Read-side query commands (posts, thread, comments, subs)   | Complete    |
+| 9  | Markdown renderer (`--format md` default; `--format json`) | Complete    |
+| 10 | Admin commands (`init`, `subs list`)                       | Complete (folded into Slices 7 + 8) |
+| 11+| Live integration test, polish (sketched in `plan.md`)      | —           |
 
 ## Constraints
 - Cross-platform: runs unchanged on Windows / Linux / macOS from a single codebase.

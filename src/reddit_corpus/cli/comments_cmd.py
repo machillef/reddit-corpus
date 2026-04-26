@@ -27,8 +27,8 @@ def comments_group() -> None:
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json"]),
-    default="json",
+    type=click.Choice(["md", "json"]),
+    default="md",
     show_default=True,
 )
 @click.pass_context
@@ -41,7 +41,6 @@ def comments_search(
     fmt: str,
 ) -> None:
     """Search comment bodies in `sub` for a regex pattern."""
-    _ = fmt
     config = load_config_or_exit(ctx, config_path)
     conn = open_db_or_exit(ctx, config.paths.db_path)
     try:
@@ -56,6 +55,9 @@ def comments_search(
             click.echo(f"Invalid regex pattern: {exc}", err=True)
             ctx.exit(2)
             return
-        click.echo(render.render_comments_json(hits))
+        if fmt == "json":
+            click.echo(render.render_comments_json(hits))
+        else:
+            click.echo(render.render_comments_md(hits))
     finally:
         conn.close()

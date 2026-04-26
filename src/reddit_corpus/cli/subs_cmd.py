@@ -21,18 +21,20 @@ def subs_group() -> None:
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json"]),
-    default="json",
+    type=click.Choice(["md", "json"]),
+    default="md",
     show_default=True,
 )
 @click.pass_context
 def subs_list(ctx: click.Context, config_path: str | None, fmt: str) -> None:
     """List subreddits in the corpus with first-seen and last-ingested timestamps."""
-    _ = fmt
     config = load_config_or_exit(ctx, config_path)
     conn = open_db_or_exit(ctx, config.paths.db_path)
     try:
         rows = subs_dao.list_subreddits(conn)
-        click.echo(render.render_subs_json(rows))
+        if fmt == "json":
+            click.echo(render.render_subs_json(rows))
+        else:
+            click.echo(render.render_subs_md(rows))
     finally:
         conn.close()

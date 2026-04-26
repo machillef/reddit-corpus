@@ -111,10 +111,19 @@ db_path = "{db.as_posix()}"
 
 
 def _invoke(args: list[str]) -> dict:
+    """Invoke a read command with --format json and return the parsed payload."""
+    runner = CliRunner()
+    result = runner.invoke(cli, [*args, "--format", "json"])
+    assert result.exit_code == 0, f"exit={result.exit_code} output={result.output!r}"
+    return json.loads(result.output)
+
+
+def _invoke_md(args: list[str]) -> str:
+    """Invoke a read command and return the raw markdown output."""
     runner = CliRunner()
     result = runner.invoke(cli, args)
     assert result.exit_code == 0, f"exit={result.exit_code} output={result.output!r}"
-    return json.loads(result.output)
+    return result.output
 
 
 def test_posts_list_filters_by_sub(tmp_path: Path, db_with_data: Path) -> None:
@@ -315,3 +324,73 @@ def test_posts_list_canonicalizes_sub_input(tmp_path: Path, db_with_data: Path) 
     )
     ids = {p["id"] for p in payload["posts"]}
     assert ids == {"p1", "p2"}
+
+
+# ---------- markdown output ---------- #
+
+
+def test_posts_list_md_default_format(tmp_path: Path, db_with_data: Path) -> None:
+    """No --format flag means markdown — that is the documented default."""
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(
+        ["posts", "list", "--config-path", str(cfg), "--sub", "anthropic"]
+    )
+    assert "title-p1" in output
+    assert "title-p2" in output
+    assert "u/alice" in output
+    # Make sure we did not accidentally emit JSON braces.
+    assert not output.strip().startswith("{")
+
+
+def test_posts_show_md_includes_title_and_score(
+    tmp_path: Path, db_with_data: Path
+) -> None:
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(["posts", "show", "p1", "--config-path", str(cfg)])
+    assert "# r/anthropic — title-p1" in output
+    assert "▲99" in output
+    assert "u/alice" in output
+
+
+def test_thread_show_md_indents_replies(tmp_path: Path, db_with_data: Path) -> None:
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(["thread", "show", "p1", "--config-path", str(cfg)])
+    # parent at depth 0 (no indent), reply at depth 1 (two-space indent).
+    assert "### u/bob ▲1" in output
+    assert "  ### u/bob ▲1" in output  # depth-1 reply is indented
+    assert "Comments (2)" in output
+
+
+def test_comments_search_md_renders_match(tmp_path: Path, db_with_data: Path) -> None:
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(
+        [
+            "comments",
+            "search",
+            "--config-path",
+            str(cfg),
+            "--sub",
+            "anthropic",
+            "--pattern",
+            "claude",
+        ]
+    )
+    assert "**c1**" in output
+    assert "claude code rocks" in output
+
+
+def test_subs_list_md_is_a_table(tmp_path: Path, db_with_data: Path) -> None:
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(["subs", "list", "--config-path", str(cfg)])
+    assert "| Subreddit |" in output
+    assert "Anthropic" in output
+    assert "Python" in output
+
+
+def test_posts_list_md_empty_corpus(tmp_path: Path, db_with_data: Path) -> None:
+    """A subreddit with no matching posts renders a friendly empty message in md."""
+    cfg = _write_config(tmp_path, db_with_data)
+    output = _invoke_md(
+        ["posts", "list", "--config-path", str(cfg), "--sub", "ghost-sub"]
+    )
+    assert "no posts" in output.lower()

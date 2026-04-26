@@ -42,10 +42,10 @@ def posts_group() -> None:
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json"]),
-    default="json",
+    type=click.Choice(["md", "json"]),
+    default="md",
     show_default=True,
-    help="Output format. (markdown lands in Slice 9.)",
+    help="Output format.",
 )
 @click.pass_context
 def posts_list(
@@ -58,7 +58,6 @@ def posts_list(
     fmt: str,
 ) -> None:
     """List posts in a subreddit, filtered by recency, sorted by score or created."""
-    _ = fmt  # only json today; flag exists so callers don't have to learn it later
     config = load_config_or_exit(ctx, config_path)
     conn = open_db_or_exit(ctx, config.paths.db_path)
     try:
@@ -73,7 +72,10 @@ def posts_list(
             top_n=top_n,
             sort=cast(SortKey, sort),
         )
-        click.echo(render.render_posts_json(rows))
+        if fmt == "json":
+            click.echo(render.render_posts_json(rows))
+        else:
+            click.echo(render.render_posts_md(rows))
     finally:
         conn.close()
 
@@ -86,8 +88,8 @@ def posts_list(
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json"]),
-    default="json",
+    type=click.Choice(["md", "json"]),
+    default="md",
     show_default=True,
 )
 @click.pass_context
@@ -98,7 +100,6 @@ def posts_show(
     fmt: str,
 ) -> None:
     """Fetch a single post by id (no comments — use `thread show` for that)."""
-    _ = fmt
     config = load_config_or_exit(ctx, config_path)
     conn = open_db_or_exit(ctx, config.paths.db_path)
     try:
@@ -107,6 +108,9 @@ def posts_show(
             click.echo(f"No post with id {post_id!r} in the corpus.", err=True)
             ctx.exit(1)
             return
-        click.echo(render.render_post_json(post))
+        if fmt == "json":
+            click.echo(render.render_post_json(post))
+        else:
+            click.echo(render.render_post_md(post))
     finally:
         conn.close()

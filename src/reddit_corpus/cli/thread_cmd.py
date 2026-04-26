@@ -23,8 +23,8 @@ def thread_group() -> None:
 @click.option(
     "--format",
     "fmt",
-    type=click.Choice(["json"]),
-    default="json",
+    type=click.Choice(["md", "json"]),
+    default="md",
     show_default=True,
 )
 @click.pass_context
@@ -35,7 +35,6 @@ def thread_show(
     fmt: str,
 ) -> None:
     """Fetch a post and its full comment tree in tree-walk order."""
-    _ = fmt
     config = load_config_or_exit(ctx, config_path)
     conn = open_db_or_exit(ctx, config.paths.db_path)
     try:
@@ -45,6 +44,9 @@ def thread_show(
             ctx.exit(1)
             return
         thread = comments_dao.walk_thread(conn, post_id)
-        click.echo(render.render_thread_json(post, thread))
+        if fmt == "json":
+            click.echo(render.render_thread_json(post, thread))
+        else:
+            click.echo(render.render_thread_md(post, thread))
     finally:
         conn.close()

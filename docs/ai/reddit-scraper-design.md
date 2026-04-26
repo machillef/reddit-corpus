@@ -414,8 +414,12 @@ Restating the non-goals from `requirements.md` so they don't creep in during sli
 
 ## Glossary
 
-- **PRAW** — Python Reddit API Wrapper, the canonical OAuth-aware Reddit client (https://praw.readthedocs.io). Handles auth, pagination, rate-limit headers.
-- **Drift policy** — the rule for what happens when the ingester re-encounters content. Options were `overwrite` (chosen), `snapshot-on-fetch`, and `hybrid`. See `requirements.md`.
-- **Corpus** — the SQLite database file plus the rows in it. The system has exactly one corpus per machine.
-- **Listing spec** — a string of the form `new`, `hot`, or `top:WINDOW` where WINDOW ∈ {`hour`, `day`, `week`, `month`, `year`, `all`}. Used in the config and `--listings` flag.
-- **More-expand limit** — argument to `submission.comments.replace_more(limit=N)`. The maximum number of `MoreComments` stubs expanded per post, *not* a tree-depth cap. `N=None` is unbounded; defaults to 32 (plenty for a small/medium sub, bounded enough not to blow the API budget on a viral post).
+> **The canonical project glossary lives at `CONTEXT.md` at the repo root.**
+> Terms previously listed inline in this document — Corpus, Drift policy,
+> Listing spec, More-expand limit — have been promoted there alongside the
+> 2026 additions (Comment forest, Tree-walk order, Orphan Comment, Data API,
+> Devvit, Responsible Builder Policy, Script app, Refresh token, Reddit
+> credentials). The single non-promoted entry below is for the third-party
+> library, which sits outside the project's own domain language.
+
+- **PRAW** — Python Reddit API Wrapper, the canonical OAuth-aware Reddit client (https://praw.readthedocs.io). Handles auth, pagination, rate-limit headers. Third-party dependency, not project-domain vocabulary; see `CONTEXT.md` for in-project terms.

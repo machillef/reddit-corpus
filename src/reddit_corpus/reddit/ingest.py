@@ -1,8 +1,13 @@
-"""Listing pull (no comment expansion in this slice).
+"""Listing pull and comment-tree expansion.
 
 `pull_listing(client, sub, listing_spec, fetched_at)` produces canonical `Post`
-dataclasses from a (real or fake) PRAW client. Comment-tree expansion is
-deferred to Slice 6.
+dataclasses from a (real or fake) PRAW client.
+
+`expand_thread(submission, sub_canonical, more_expand_limit, fetched_at)` calls
+PRAW's `replace_more()` and walks the resulting comment forest, emitting a
+flat list of `Comment` dataclasses in tree-walk order (parents before children)
+so a sequential `upsert_comments` pass satisfies the FK on `parent_comment_id`
+row by row.
 """
 
 from __future__ import annotations
@@ -10,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from reddit_corpus.reddit import Post, RemovalStatus
+from reddit_corpus.reddit import Comment, Post, RemovalStatus
 from reddit_corpus.reddit.client import canonicalize_subreddit
 
 _VALID_TOP_WINDOWS = frozenset({"hour", "day", "week", "month", "year", "all"})
@@ -124,3 +129,76 @@ def pull_listing(
 
     for submission in submissions:
         yield _submission_to_post(submission, canonical, fetched_at)
+
+
+def expand_thread(
+    submission: Any,
+    *,
+    sub_canonical: str,
+    fetched_at: int,
+    more_expand_limit: int | None = 32,
+) -> tuple[Post, list[Comment]]:
+    """Expand a Submission's comment forest and emit a flat tree-walk-ordered list.
+
+    Calls `submission.comments.replace_more(limit=more_expand_limit)` to drop
+    `MoreComments` placeholder stubs (PRAW's argument is the maximum number of
+    such stubs to expand, not a tree-depth cap). Then walks the surviving
+    forest depth-first, parents before children, emitting `Comment`
+    dataclasses with `(id, post_id, parent_comment_id, depth, ...)`.
+
+    Top-level comments have `parent_comment_id = None` (their parent is the
+    post itself, captured separately in the `post_id` column). Nested
+    comments have `parent_comment_id` set to the bare comment id (the
+    `t1_` fullname prefix is stripped).
+
+    If a comment's `parent_id` does not resolve to another comment in the
+    forest (e.g. its parent was a MoreComments stub that wasn't expanded),
+    the comment is still emitted with `parent_comment_id = None` and depth
+    capped at 0 — the caller should be tolerant of these orphans.
+    """
+    submission.comments.replace_more(limit=more_expand_limit)
+
+    flat = list(submission.comments.list())
+    by_id = {c.id: c for c in flat}
+    post_fullname = f"t3_{submission.id}"
+
+    out: list[Comment] = []
+    depth_cache: dict[str, int] = {}
+
+    def _resolve_depth_and_parent(c: Any) -> tuple[int, str | None]:
+        parent_fullname = getattr(c, "parent_id", "") or ""
+        if parent_fullname == post_fullname:
+            return 0, None
+        if parent_fullname.startswith("t1_"):
+            parent_id = parent_fullname[len("t1_") :]
+            if parent_id in by_id:
+                parent_depth = depth_cache.get(parent_id)
+                if parent_depth is None:
+                    parent_depth, _ = _resolve_depth_and_parent(by_id[parent_id])
+                    depth_cache[parent_id] = parent_depth
+                return parent_depth + 1, parent_id
+        # Orphan: parent comment is not in the local forest. Emit at depth 0.
+        return 0, None
+
+    for c in flat:
+        depth, parent = _resolve_depth_and_parent(c)
+        depth_cache[c.id] = depth
+        out.append(
+            Comment(
+                id=c.id,
+                post_id=submission.id,
+                parent_comment_id=parent,
+                author=_author_name(getattr(c, "author", None)),
+                body=getattr(c, "body", "") or "",
+                score=int(getattr(c, "score", 0)),
+                created_utc=int(getattr(c, "created_utc", 0)),
+                depth=depth,
+                removal_status=_map_removal_status(
+                    getattr(c, "removed_by_category", None)
+                ),
+                fetched_at=fetched_at,
+            )
+        )
+
+    post = _submission_to_post(submission, sub_canonical, fetched_at)
+    return post, out

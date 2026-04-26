@@ -1,11 +1,13 @@
 """Hand-rolled PRAW shape fakes for unit tests.
 
-Only the surface used by `reddit/client.py` and `reddit/ingest.pull_listing` is
-modeled. Comment-tree expansion fakes will land alongside Slice 6.
+Models the surface used by `reddit/client.py`, `reddit/ingest.pull_listing`,
+and `reddit/ingest.expand_thread`. PRAW's real `Submission.comments` is a
+`CommentForest`; we expose the same `.list()` and `.replace_more()` methods.
 """
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
@@ -16,8 +18,85 @@ class FakeAuthorRef:
 
 
 @dataclass(slots=True)
+class FakeComment:
+    """Stand-in for `praw.models.Comment`. `parent_id` is the Reddit-style
+    fullname: `t3_<post_id>` for top-level replies, `t1_<comment_id>` for nested
+    replies. `replies` is a flat list of direct child comments."""
+
+    id: str
+    body: str = ""
+    score: int = 0
+    created_utc: float = 0.0
+    parent_id: str = ""
+    author: FakeAuthorRef | None = field(default_factory=lambda: FakeAuthorRef("alice"))
+    removed_by_category: str | None = None
+    replies: list["FakeComment"] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class FakeMoreComments:
+    """Stand-in for `praw.models.MoreComments` — the placeholder objects PRAW
+    exposes in a forest until `replace_more()` is called."""
+
+    id: str = "more"
+
+
+@dataclass(slots=True)
+class FakeCommentForest:
+    """Mirrors `submission.comments` — supports `.list()` and `.replace_more()`.
+
+    Field and return annotations use `builtins.list[...]` rather than `list[...]`
+    because the class also defines a `list` *method* that mirrors PRAW's
+    `CommentForest.list()`, which would otherwise shadow the builtin in
+    annotation resolution.
+    """
+
+    top_level: builtins.list["FakeComment | FakeMoreComments"] = field(
+        default_factory=builtins.list
+    )
+    replace_more_called_with: builtins.list[int | None] = field(
+        default_factory=builtins.list
+    )
+
+    def replace_more(self, limit: int | None = 32) -> builtins.list[FakeMoreComments]:
+        """Drop FakeMoreComments stubs from the forest (mimics PRAW's behavior).
+
+        Records `limit` for assertions. Returns the list of stubs that were
+        skipped (PRAW returns this so callers can see what wasn't expanded).
+        """
+        self.replace_more_called_with.append(limit)
+        skipped: builtins.list[FakeMoreComments] = []
+        kept: builtins.list[FakeComment | FakeMoreComments] = []
+        for c in self.top_level:
+            if isinstance(c, FakeMoreComments):
+                skipped.append(c)
+            else:
+                kept.append(c)
+        self.top_level = kept
+        return skipped
+
+    def list(self) -> builtins.list["FakeComment"]:
+        """Flat tree-walk of the forest after replace_more.
+
+        PRAW's CommentForest.list() traverses depth-first, parents before
+        children. We do the same here.
+        """
+        out: builtins.list[FakeComment] = []
+
+        def _walk(node: FakeComment) -> None:
+            out.append(node)
+            for child in node.replies:
+                _walk(child)
+
+        for top in self.top_level:
+            if isinstance(top, FakeComment):
+                _walk(top)
+        return out
+
+
+@dataclass(slots=True)
 class FakeSubmission:
-    """The minimal subset of `praw.models.Submission` we read in pull_listing."""
+    """Subset of `praw.models.Submission` we read in pull_listing + expand_thread."""
 
     id: str
     title: str = "title"
@@ -31,9 +110,8 @@ class FakeSubmission:
     locked: bool = False
     author: FakeAuthorRef | None = field(default_factory=lambda: FakeAuthorRef("alice"))
     removed_by_category: str | None = None
-    crosspost_parent: str | None = (
-        None  # PRAW exposes a fullname like 't3_xxxxx' or omits the attr
-    )
+    crosspost_parent: str | None = None
+    comments: FakeCommentForest = field(default_factory=FakeCommentForest)
 
 
 @dataclass(slots=True)

@@ -29,12 +29,13 @@ When all checkboxes are ticked and Step 7's structured output has been emitted, 
 | #  | Slice                                                      | Status      |
 |----|------------------------------------------------------------|-------------|
 | 0  | Bootstrap (requirements / design / decisions / scaffold)   | Complete    |
-| 1  | Push to GitHub + cross-platform CI matrix                  | Partial (CI YAML written; GitHub push blocked on user confirmation) |
+| 1  | Push to GitHub + cross-platform CI matrix                  | Complete    |
 | 2  | Pre-flight check script                                    | Complete    |
 | 3  | SQLite schema and DAOs                                     | Complete    |
 | 4  | Config layer                                               | Complete    |
 | 5  | Reddit auth + listing pull (no comments yet)               | Complete    |
-| 6+ | (sketched in `plan.md`; detailed JIT by `arc:continue`)    | —           |
+| 6  | Comment-tree expansion (`expand_thread`)                   | Complete    |
+| 7+ | (sketched in `plan.md`; detailed JIT by `arc:continue`)    | —           |
 
 ## Constraints
 - Cross-platform: runs unchanged on Windows / Linux / macOS from a single codebase.
@@ -121,7 +122,7 @@ Last updated: 2026-04-26
 - CI matrix has not been exercised on a real push.
 
 ### Blockers
-- Pre-slice action (GitHub repo creation) requires user confirmation of owner/name. The `/arc:loop` execution skipped this human-only step. See `.claude/loop-qa.local.md` for the resume checklist.
+None. Repo created at <https://github.com/machillef/reddit-corpus> on 2026-04-26 and CI matrix triggered on first push.
 
 ---
 

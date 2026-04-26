@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+
+# Project runtime artifacts (must never be committed)
+corpus.db
+corpus.db-journal
+corpus.db-wal
+corpus.db-shm
+config.toml
+*.cassette
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Agent / harness scratch space (private, never committed)
+.claude/
+*.local.md
+*.local.toml

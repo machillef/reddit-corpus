@@ -1,0 +1,34 @@
+# reddit-corpus example configuration.
+#
+# Copy this file to your platform data dir's `config.toml`:
+#   Windows: %APPDATA%\reddit-corpus\config.toml
+#   Linux:   ~/.local/share/reddit-corpus/config.toml
+#   macOS:   ~/Library/Application Support/reddit-corpus/config.toml
+#
+# Each value can also be supplied via env var (REDDIT_CORPUS_*) or CLI flag.
+# Precedence (highest wins): env > CLI > file > default.
+
+[reddit]
+# OAuth credentials from https://www.reddit.com/prefs/apps (script app type).
+client_id     = "SETME"
+client_secret = "SETME"
+# One-time OAuth refresh token. See README "Re-authenticating" for the dance.
+refresh_token = "SETME"
+# Reddit asks for a descriptive UA per their API rules.
+user_agent    = "reddit-corpus/0.1 by u/yourhandle"
+
+[ingest]
+# Subreddits to ingest. CLI `--sub foo,bar` overrides this list.
+# Names are stored canonical-lowercase regardless of how you write them here.
+subreddits = ["anthropic"]
+# Listing specs to pull per sub. Valid: "new", "hot", or "top:WINDOW"
+# where WINDOW ∈ {hour, day, week, month, year, all}.
+listings   = ["new", "top:week"]
+# Max number of MoreComments stubs to expand per post.
+# Set to 0 to disable expansion entirely; PRAW's "None" semantic (unbounded)
+# is not exposed in v1 — pick an integer ceiling.
+more_expand_limit = 32
+
+[paths]
+# "default" → use the platform data dir. Otherwise an absolute path.
+db_path = "default"

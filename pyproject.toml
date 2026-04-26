@@ -1,0 +1,28 @@
+[project]
+name = "reddit-corpus"
+version = "0.1.0"
+description = "Personal Reddit corpus tool: scheduled praw ingester + LLM-friendly query CLI over a local SQLite store."
+readme = "README.md"
+authors = [
+    { name = "Achillefs Moschos", email = "machillef@outlook.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.3.3",
+    "platformdirs>=4.9.6",
+    "praw>=7.8.1",
+]
+
+[project.scripts]
+reddit-corpus = "reddit_corpus:main"
+
+[build-system]
+requires = ["uv_build>=0.10.7,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+    "ty>=0.0.32",
+]
